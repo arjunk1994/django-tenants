@@ -94,3 +94,42 @@ class TenantMainMiddleware(MiddlewareMixin):
             if (hasattr(settings, 'PUBLIC_SCHEMA_URLCONF') and
                     (force_public or request.tenant.schema_name == get_public_schema_name())):
                 request.urlconf = settings.PUBLIC_SCHEMA_URLCONF
+
+
+class MultiDBTenantMainMiddleware(TenantMainMiddleware):
+    """
+    Multi-DB aware tenant middleware.
+    Sets the tenant schema on ALL database connections (default + replicas).
+    """
+
+    def process_request(self, request):
+        from django.db import connections as db_connections
+
+        # Set ALL connections to public first
+        for db_alias in db_connections:
+            conn = db_connections[db_alias]
+            if hasattr(conn, 'set_schema_to_public'):
+                conn.set_schema_to_public()
+
+        try:
+            hostname = self.hostname_from_request(request)
+        except DisallowedHost:
+            from django.http import HttpResponseNotFound
+            return HttpResponseNotFound()
+
+        domain_model = get_tenant_domain_model()
+        try:
+            tenant = self.get_tenant(domain_model, hostname)
+        except domain_model.DoesNotExist:
+            return self.no_tenant_found(request, hostname)
+
+        tenant.domain_url = hostname
+        request.tenant = tenant
+
+        # Set tenant on ALL connections
+        for db_alias in db_connections:
+            conn = db_connections[db_alias]
+            if hasattr(conn, 'set_tenant'):
+                conn.set_tenant(request.tenant)
+
+        self.setup_url_routing(request)
