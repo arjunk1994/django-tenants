@@ -1,6 +1,7 @@
 import logging
 
-from django.db import connection
+from django.db import connections
+from django_tenants.utils import get_tenant_database_alias
 
 
 class TenantContextFilter(logging.Filter):
@@ -9,6 +10,11 @@ class TenantContextFilter(logging.Filter):
     Thanks to @regolith for the snippet on https://github.com/bernardopires/django-tenant-schemas/issues/248
     """
     def filter(self, record):
-        record.schema_name = connection.tenant.schema_name
-        record.domain_url = getattr(connection.tenant, 'domain_url', None)
+        try:
+            conn = connections[get_tenant_database_alias()]
+            record.schema_name = conn.tenant.schema_name
+            record.domain_url = getattr(conn.tenant, 'domain_url', None)
+        except Exception:
+            record.schema_name = 'public'
+            record.domain_url = None
         return True
