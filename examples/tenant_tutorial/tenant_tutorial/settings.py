@@ -49,9 +49,6 @@ SITE_ID = 1
 # to load the internationalization machinery.
 USE_I18N = True
 
-# If you set this to False, Django will not format dates, numbers and
-# calendars according to the current locale.
-USE_L10N = True
 
 # If you set this to False, Django will not use timezone-aware datetimes.
 USE_TZ = False
@@ -207,6 +204,8 @@ LOGGING = {
     }
 }
 
-DEFAULT_FILE_STORAGE = "django_tenants.files.storage.TenantFileSystemStorage"
+STORAGES = {
+    "default": {"BACKEND": "django_tenants.files.storage.TenantFileSystemStorage"},
+}
 MULTITENANT_RELATIVE_MEDIA_ROOT = "uploaded_files"
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
