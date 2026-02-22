@@ -1,4 +1,6 @@
-from django.test import RequestFactory
+from unittest import mock
+
+from django.test import RequestFactory, SimpleTestCase
 
 from django_tenants import utils
 from django_tenants.middleware import TenantMainMiddleware
@@ -53,3 +55,83 @@ class ConfigStringParsingTestCase(TenantTestCase):
         request = factory.get('/any/request/', HTTP_HOST=tenant_domain)
         tm.process_request(request)
         self.assertEqual(get_tenant(request).schema_name, 'test')
+
+
+class MultiDbContextTestCase(SimpleTestCase):
+    def test_schema_context_updates_and_restores_other_connections(self):
+        primary = mock.Mock()
+        primary.tenant = object()
+
+        replica = mock.Mock()
+        replica.tenant = None
+        replica.set_schema = mock.Mock()
+        replica.set_schema_to_public = mock.Mock()
+
+        mocked_connections = {
+            'default': primary,
+            'replica1': replica,
+        }
+
+        with override_settings(MULTI_DB_ENABLED=True):
+            with mock.patch.object(utils, 'connections', mocked_connections):
+                with utils.schema_context('tenant1'):
+                    pass
+
+        primary.set_schema.assert_called_once_with('tenant1')
+        replica.set_schema.assert_called_once_with('tenant1')
+        replica.set_schema_to_public.assert_called_once_with()
+        primary.set_tenant.assert_called_once_with(primary.tenant)
+
+    def test_tenant_context_updates_and_restores_other_connections(self):
+        previous_primary_tenant = object()
+        previous_replica_tenant = object()
+
+        primary = mock.Mock()
+        primary.tenant = previous_primary_tenant
+
+        replica = mock.Mock()
+        replica.tenant = previous_replica_tenant
+        replica.set_tenant = mock.Mock()
+
+        tenant = object()
+        mocked_connections = {
+            'default': primary,
+            'replica1': replica,
+        }
+
+        with override_settings(MULTI_DB_ENABLED=True):
+            with mock.patch.object(utils, 'connections', mocked_connections):
+                with utils.tenant_context(tenant):
+                    pass
+
+        primary.set_tenant.assert_has_calls(
+            [mock.call(tenant), mock.call(previous_primary_tenant)]
+        )
+        replica.set_tenant.assert_has_calls(
+            [mock.call(tenant), mock.call(previous_replica_tenant)]
+        )
+
+    def test_contexts_only_touch_selected_database_when_multidb_disabled(self):
+        primary = mock.Mock()
+        primary.tenant = None
+
+        replica = mock.Mock()
+        replica.tenant = None
+        replica.set_schema = mock.Mock()
+        replica.set_tenant = mock.Mock()
+
+        mocked_connections = {
+            'default': primary,
+            'replica1': replica,
+        }
+
+        with override_settings(MULTI_DB_ENABLED=False):
+            with mock.patch.object(utils, 'connections', mocked_connections):
+                with utils.schema_context('tenant1'):
+                    pass
+
+                with utils.tenant_context(object()):
+                    pass
+
+        replica.set_schema.assert_not_called()
+        replica.set_tenant.assert_not_called()
