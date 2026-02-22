@@ -93,7 +93,10 @@ django-tenants provides a replacement tenant-aware ``TenantStaticFilesStorage`` 
 
     # in settings.py
 
-    STATICFILES_STORAGE = "django_tenants.staticfiles.storage.TenantStaticFilesStorage"
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django_tenants.staticfiles.storage.TenantStaticFilesStorage"},
+    }
 
     MULTITENANT_RELATIVE_STATIC_ROOT = ""  # (default: create sub-directory for each tenant)
 
@@ -122,7 +125,7 @@ Configuring media file storage
 
 The default Django behavior is to store all files that are uploaded by users in one folder. The path for this upload folder can be configured via the standard ``MEDIA_ROOT`` setting.
 
-The above behaviour can be changed for multi-tenant setups so that each tenant will have a dedicated sub-directory for storing user-uploaded files. To do this simply change ``DEFAULT_FILE_STORAGE`` so that ``TenantFileSystemStorage`` replaces the standard ``FileSystemStorage`` handler:
+The above behaviour can be changed for multi-tenant setups so that each tenant will have a dedicated sub-directory for storing user-uploaded files. To do this configure the ``default`` backend in ``STORAGES`` so that ``TenantFileSystemStorage`` replaces the standard ``FileSystemStorage`` handler:
 
 .. code-block:: python
 
