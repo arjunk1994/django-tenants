@@ -126,7 +126,27 @@ class schema_context(ContextDecorator):
         self.previous_tenant = self.connection.tenant
         self.connection.set_schema(self.schema_name)
 
+        self._multidb_previous_tenants = {}
+        if getattr(settings, 'MULTI_DB_ENABLED', False):
+            for alias in connections:
+                if alias == self.database:
+                    continue
+
+                conn = connections[alias]
+                if hasattr(conn, 'set_schema'):
+                    self._multidb_previous_tenants[alias] = getattr(conn, 'tenant', None)
+                    conn.set_schema(self.schema_name)
+
     def __exit__(self, *exc):
+        for alias, prev_tenant in getattr(self, '_multidb_previous_tenants', {}).items():
+            conn = connections[alias]
+            if prev_tenant is None:
+                if hasattr(conn, 'set_schema_to_public'):
+                    conn.set_schema_to_public()
+            else:
+                if hasattr(conn, 'set_tenant'):
+                    conn.set_tenant(prev_tenant)
+
         if self.previous_tenant is None:
             self.connection.set_schema_to_public()
         else:
@@ -145,7 +165,27 @@ class tenant_context(ContextDecorator):
         self.previous_tenant = self.connection.tenant
         self.connection.set_tenant(self.tenant)
 
+        self._multidb_previous_tenants = {}
+        if getattr(settings, 'MULTI_DB_ENABLED', False):
+            for alias in connections:
+                if alias == self.database:
+                    continue
+
+                conn = connections[alias]
+                if hasattr(conn, 'set_tenant'):
+                    self._multidb_previous_tenants[alias] = getattr(conn, 'tenant', None)
+                    conn.set_tenant(self.tenant)
+
     def __exit__(self, *exc):
+        for alias, prev_tenant in getattr(self, '_multidb_previous_tenants', {}).items():
+            conn = connections[alias]
+            if prev_tenant is None:
+                if hasattr(conn, 'set_schema_to_public'):
+                    conn.set_schema_to_public()
+            else:
+                if hasattr(conn, 'set_tenant'):
+                    conn.set_tenant(prev_tenant)
+
         if self.previous_tenant is None:
             self.connection.set_schema_to_public()
         else:
