@@ -117,7 +117,8 @@ def get_tenant_migration_order():
 
 
 class schema_context(ContextDecorator):
-    # Please do not try and merge this with tenant_context as they are not the same. As pointed out in #501
+    # Please do not try and merge this with tenant_context as they are not the same.
+    # As pointed out in #501
     def __init__(self, *args, **kwargs):
         self.schema_name = args[0]
         self.database = kwargs.get("database", get_tenant_database_alias())
@@ -128,19 +129,24 @@ class schema_context(ContextDecorator):
         self.previous_tenant = self.connection.tenant
         self.connection.set_schema(self.schema_name)
 
+        # Multi-DB: also set schema on all other connections (e.g. replicas)
         self._multidb_previous_tenants = {}
         if getattr(settings, 'MULTI_DB_ENABLED', False):
             for alias in connections:
                 if alias == self.database:
                     continue
-
                 conn = connections[alias]
                 if hasattr(conn, 'set_schema'):
-                    self._multidb_previous_tenants[alias] = getattr(conn, 'tenant', None)
+                    self._multidb_previous_tenants[alias] = getattr(
+                        conn, 'tenant', None
+                    )
                     conn.set_schema(self.schema_name)
 
     def __exit__(self, *exc):
-        for alias, prev_tenant in getattr(self, '_multidb_previous_tenants', {}).items():
+        # Restore replica connections first
+        for alias, prev_tenant in getattr(
+            self, '_multidb_previous_tenants', {}
+        ).items():
             conn = connections[alias]
             if prev_tenant is None:
                 if hasattr(conn, 'set_schema_to_public'):
@@ -149,6 +155,7 @@ class schema_context(ContextDecorator):
                 if hasattr(conn, 'set_tenant'):
                     conn.set_tenant(prev_tenant)
 
+        # Restore the primary connection
         if self.previous_tenant is None:
             self.connection.set_schema_to_public()
         else:
@@ -156,7 +163,8 @@ class schema_context(ContextDecorator):
 
 
 class tenant_context(ContextDecorator):
-    # Please do not try and merge this with schema_context as they are not the same. As pointed out in #501
+    # Please do not try and merge this with schema_context as they are not the same.
+    # As pointed out in #501
     def __init__(self, *args, **kwargs):
         self.tenant = args[0]
         self.database = kwargs.get("database", get_tenant_database_alias())
@@ -167,19 +175,24 @@ class tenant_context(ContextDecorator):
         self.previous_tenant = self.connection.tenant
         self.connection.set_tenant(self.tenant)
 
+        # Multi-DB: also set tenant on all other connections (e.g. replicas)
         self._multidb_previous_tenants = {}
         if getattr(settings, 'MULTI_DB_ENABLED', False):
             for alias in connections:
                 if alias == self.database:
                     continue
-
                 conn = connections[alias]
                 if hasattr(conn, 'set_tenant'):
-                    self._multidb_previous_tenants[alias] = getattr(conn, 'tenant', None)
+                    self._multidb_previous_tenants[alias] = getattr(
+                        conn, 'tenant', None
+                    )
                     conn.set_tenant(self.tenant)
 
     def __exit__(self, *exc):
-        for alias, prev_tenant in getattr(self, '_multidb_previous_tenants', {}).items():
+        # Restore replica connections first
+        for alias, prev_tenant in getattr(
+            self, '_multidb_previous_tenants', {}
+        ).items():
             conn = connections[alias]
             if prev_tenant is None:
                 if hasattr(conn, 'set_schema_to_public'):
@@ -188,6 +201,7 @@ class tenant_context(ContextDecorator):
                 if hasattr(conn, 'set_tenant'):
                     conn.set_tenant(prev_tenant)
 
+        # Restore the primary connection
         if self.previous_tenant is None:
             self.connection.set_schema_to_public()
         else:
