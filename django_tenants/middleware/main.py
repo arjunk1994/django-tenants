@@ -1,13 +1,14 @@
 from django.conf import settings
 from django.core.exceptions import DisallowedHost
-from django.db import connection
+from django.db import connection, connections
 from django.http import Http404
 from django.urls import set_urlconf
 from django.utils.module_loading import import_string
 from django.utils.deprecation import MiddlewareMixin
 
+from django_tenants.middleware.suspicious import SuspiciousTenantMiddleware
 from django_tenants.utils import remove_www, get_public_schema_name, get_tenant_types, \
-    has_multi_type_tenants, get_tenant_domain_model, get_public_schema_urlconf
+    has_multi_type_tenants, get_tenant_domain_model, get_public_schema_urlconf, get_db_alias
 
 
 class TenantMainMiddleware(MiddlewareMixin):
@@ -96,49 +97,16 @@ class TenantMainMiddleware(MiddlewareMixin):
                 request.urlconf = settings.PUBLIC_SCHEMA_URLCONF
 
 
-class MultiDBTenantMainMiddleware(TenantMainMiddleware):
+class MultiDBTenantMainMiddleware(SuspiciousTenantMiddleware):
     """
     Multi-DB aware tenant middleware.
     Sets the tenant schema on ALL database connections (default + replicas).
     """
 
-    def process_request(self, request):
-        from django.db import connections as db_connections
+    def set_connection_to_public(self):
+        for db in get_db_alias():
+            connections[db].set_schema_to_public()
 
-        # Iterate over all configured DBs (explicit list)
-        aliases = list(db_connections.databases.keys())
-
-        # Set ALL connections to public first
-        for db_alias in aliases:
-            conn = db_connections[db_alias]
-            if hasattr(conn, 'set_schema_to_public'):
-                conn.set_schema_to_public()
-
-        try:
-            hostname = self.hostname_from_request(request)
-        except DisallowedHost:
-            from django.http import HttpResponseNotFound
-            return HttpResponseNotFound()
-
-        domain_model = get_tenant_domain_model()
-        try:
-            tenant = self.get_tenant(domain_model, hostname)
-        except domain_model.DoesNotExist:
-            return self.no_tenant_found(request, hostname)
-
-        tenant.domain_url = hostname
-        request.tenant = tenant
-
-        # Set tenant on ALL connections and force search_path to be applied
-        for db_alias in aliases:
-            conn = db_connections[db_alias]
-            if hasattr(conn, 'set_tenant'):
-                conn.set_tenant(request.tenant)
-                # Force search_path to be applied now (django-tenants sets it in _cursor())
-                try:
-                    with conn.cursor() as cursor:
-                        pass
-                except Exception:
-                    pass
-
-        self.setup_url_routing(request)
+    def set_connection_to_tenant(self, tenant):
+        for db in get_db_alias():
+            connections[db].set_tenant(tenant)

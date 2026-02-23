@@ -94,6 +94,8 @@ def get_creation_fakes_migrations():
             )
     return faked
 
+def get_db_alias():
+    return settings.DATABASES.keys()
 
 def get_tenant_base_schema():
     """
