@@ -105,8 +105,11 @@ class MultiDBTenantMainMiddleware(TenantMainMiddleware):
     def process_request(self, request):
         from django.db import connections as db_connections
 
+        # Iterate over all configured DBs (explicit list)
+        aliases = list(db_connections.databases.keys())
+
         # Set ALL connections to public first
-        for db_alias in db_connections:
+        for db_alias in aliases:
             conn = db_connections[db_alias]
             if hasattr(conn, 'set_schema_to_public'):
                 conn.set_schema_to_public()
@@ -126,10 +129,16 @@ class MultiDBTenantMainMiddleware(TenantMainMiddleware):
         tenant.domain_url = hostname
         request.tenant = tenant
 
-        # Set tenant on ALL connections
-        for db_alias in db_connections:
+        # Set tenant on ALL connections and force search_path to be applied
+        for db_alias in aliases:
             conn = db_connections[db_alias]
             if hasattr(conn, 'set_tenant'):
                 conn.set_tenant(request.tenant)
+                # Force search_path to be applied now (django-tenants sets it in _cursor())
+                try:
+                    with conn.cursor() as cursor:
+                        pass
+                except Exception:
+                    pass
 
         self.setup_url_routing(request)
