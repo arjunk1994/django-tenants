@@ -6,7 +6,6 @@ from django.urls import set_urlconf
 from django.utils.module_loading import import_string
 from django.utils.deprecation import MiddlewareMixin
 
-from django_tenants.middleware.suspicious import SuspiciousTenantMiddleware
 from django_tenants.utils import remove_www, get_public_schema_name, get_tenant_types, \
     has_multi_type_tenants, get_tenant_domain_model, get_public_schema_urlconf, get_db_alias
 
@@ -97,11 +96,12 @@ class TenantMainMiddleware(MiddlewareMixin):
                 request.urlconf = settings.PUBLIC_SCHEMA_URLCONF
 
 
-class MultiDBTenantMainMiddleware(SuspiciousTenantMiddleware):
+class MultiDBTenantMainMiddleware(TenantMainMiddleware):
     """
     Multi-DB aware tenant middleware.
     Sets the tenant schema on ALL database connections (default + replicas).
     """
+    TENANT_NOT_FOUND_EXCEPTION = DisallowedHost
 
     def set_connection_to_public(self):
         for db in get_db_alias():
