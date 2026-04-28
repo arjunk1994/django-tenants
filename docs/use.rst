@@ -420,9 +420,11 @@ The command ``create_tenant`` creates a new schema
 
     ./manage.py create_tenant --domain-domain=newtenant.net --schema_name=new_tenant --name=new_tenant --description="New tenant"
 
-The argument are dynamic depending on the fields that are in the ``TenantMixin`` model.
+The arguments are dynamic depending on the fields that are in the ``TenantMixin`` model.
 For example if you have a field in the ``TenantMixin`` model called company you will be able to set this using --company=MyCompany.
-If no argument are specified for a field then you be prompted for the values.
+If a field name conflicts with an existing Django management command option (e.g. ``version``),
+it will be automatically prefixed with ``tenant-`` (e.g. ``--tenant-version``).
+If no arguments are specified for a field then you will be prompted for the values.
 There is an additional argument of -s which sets up a superuser for that tenant.
 
 
